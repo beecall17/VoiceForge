@@ -1,7 +1,7 @@
 """
 Day 3: Generate on-voice completions for each brief in data/raw_prompts.jsonl.
 
-Matches the voiceforge/ repo layout:
+The voiceforge/ repo layout:
   scripts/generate_completions.py   <- this file
   docs/voice_guidelines.md          <- read (finalized voice_guidelines_v2.md)
   data/raw_prompts.jsonl            <- read (Day 2 output)
@@ -16,23 +16,29 @@ generate_briefs.py) to select the right one. Each API call only sees the
 rules that apply to that example, instead of both personas' tone words /
 vocabulary / anti-examples diluting every call.
 
-Requires an API key. Set ONE of:
-  export ANTHROPIC_API_KEY=sk-ant-...
-  export OPENAI_API_KEY=sk-...
+Default provider is Gemini (free tier via Google AI Studio), called through
+the OpenAI-compatible Chat Completions endpoint so the rest of the script
+doesn't need a separate SDK. OpenAI is kept as an alternate option.
+
+Requires an API key. Put ONE of these in a `.env` file at your repo root
+(or export it in your shell):
+  GEMINI_API_KEY=AIza...
+  OPENAI_API_KEY=sk-...
 
 Install:
-  pip install anthropic      # if --provider anthropic
-  pip install openai         # if --provider openai
+  pip install openai python-dotenv
 
 Usage (run from the voiceforge/ repo root):
   python scripts/generate_completions.py \
       --prompts data/raw_prompts.jsonl \
       --voice docs/voice_guidelines.md \
       --out data/sft_raw.jsonl \
-      --provider anthropic
+      --provider gemini
 
-Note: check https://docs.claude.com for the current recommended model
-string before running -- the default below may drift out of date.
+Note: check https://ai.google.dev/gemini-api/docs/models and
+https://ai.google.dev/gemini-api/docs/pricing for the current recommended
+model string and free-tier rate limits before running -- the default below
+may drift out of date, and this is a fast-moving space.
 """
 
 import argparse
@@ -41,6 +47,11 @@ import os
 import sys
 import time
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load environment variables from a .env file at the repo root, if present.
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # voice_guidelines.md parsing
@@ -149,18 +160,27 @@ def already_done_ids(out_path):
 
 # ---------------------------------------------------------------------------
 # Provider calls
+#
+# Both providers go through the OpenAI python client: for Gemini, it's
+# pointed at Google's OpenAI-compatible endpoint via base_url. This keeps
+# one dependency (openai) instead of two separate SDKs.
 # ---------------------------------------------------------------------------
 
-def call_anthropic(system_prompt, user_prompt, model, max_tokens):
-    import anthropic
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
-    resp = client.messages.create(
+def call_gemini(system_prompt, user_prompt, model, max_tokens):
+    from openai import OpenAI
+    client = OpenAI(
+        api_key=os.environ["GEMINI_API_KEY"],
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    )
+    resp = client.chat.completions.create(
         model=model,
         max_tokens=max_tokens,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
     )
-    return resp.content[0].text.strip()
+    return resp.choices[0].message.content.strip()
 
 
 def call_openai(system_prompt, user_prompt, model, max_tokens):
@@ -177,6 +197,20 @@ def call_openai(system_prompt, user_prompt, model, max_tokens):
     return resp.choices[0].message.content.strip()
 
 
+PROVIDERS = {
+    "gemini": {
+        "call_fn": call_gemini,
+        "default_model": "gemini-3.5-flash-lite",
+        "key_env_var": "GEMINI_API_KEY",
+    },
+    "openai": {
+        "call_fn": call_openai,
+        "default_model": "gpt-4o-mini",
+        "key_env_var": "OPENAI_API_KEY",
+    },
+}
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -186,12 +220,26 @@ def main():
     ap.add_argument("--prompts", default="data/raw_prompts.jsonl")
     ap.add_argument("--voice", default="docs/voice_guidelines.md")
     ap.add_argument("--out", default="data/sft_raw.jsonl")
-    ap.add_argument("--provider", choices=["anthropic", "openai"], default="anthropic")
+    ap.add_argument("--provider", choices=list(PROVIDERS), default="gemini")
     ap.add_argument("--model", default=None, help="overrides the provider default")
     ap.add_argument("--max_tokens", type=int, default=300)
-    ap.add_argument("--sleep", type=float, default=0.5, help="seconds between calls")
+    ap.add_argument(
+        "--sleep", type=float, default=2.0,
+        help="seconds between calls -- free tiers are typically low "
+             "requests-per-minute, so keep this conservative and raise it "
+             "if you hit 429s",
+    )
     ap.add_argument("--limit", type=int, default=None, help="cap number of briefs (cheap test run)")
     args = ap.parse_args()
+
+    provider = PROVIDERS[args.provider]
+    if provider["key_env_var"] not in os.environ:
+        sys.exit(
+            f"Set {provider['key_env_var']} before running -- either export it "
+            f"or add it to a .env file at the repo root (see docstring)."
+        )
+    call_fn = provider["call_fn"]
+    model = args.model or provider["default_model"]
 
     briefs = load_jsonl(args.prompts)
     if args.limit:
@@ -205,17 +253,6 @@ def main():
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     done = already_done_ids(args.out)
     print(f"{len(done)} of {len(briefs)} already completed. Resuming...")
-
-    if args.provider == "anthropic":
-        call_fn = call_anthropic
-        model = args.model or "claude-sonnet-5"
-        if "ANTHROPIC_API_KEY" not in os.environ:
-            sys.exit("Set ANTHROPIC_API_KEY before running (see docstring).")
-    else:
-        call_fn = call_openai
-        model = args.model or "gpt-4o-mini"
-        if "OPENAI_API_KEY" not in os.environ:
-            sys.exit("Set OPENAI_API_KEY before running (see docstring).")
 
     with open(args.out, "a", encoding="utf-8") as f:
         for i, row in enumerate(briefs):

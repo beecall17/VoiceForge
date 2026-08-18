@@ -17,7 +17,7 @@
 
 > **Phase Focus:** Establish a ground-truth voice rubric, generate high-quality dataset pairs, set up the QLoRA pipeline on Google Colab, and execute the base SFT run.
 
-### - [x] Day 1: Brand Voice Specification
+### - Day 1: Brand Voice Specification
 * **Estimated Time:** 2.0 Hours
 * **Objective:** Concretely define the target brand persona to serve as the evaluation rubric for all downstream tasks.
 * **Key Tasks:**
@@ -31,7 +31,7 @@
 
 ---
 
-### - [ ] Day 2: Campaign Brief Synthesis (SFT Prompts)
+### - Day 2: Campaign Brief Synthesis (SFT Prompts)
 * **Estimated Time:** 3.0 Hours
 * **Objective:** Build a diverse set of prompts to ensure style generalization across different formats.
 * **Key Tasks:**
@@ -41,17 +41,17 @@
 
 ---
 
-### - [ ] Day 3: Target Completion Generation (SFT Labels)
+### - Day 3: Target Completion Generation (SFT Labels)
 * **Estimated Time:** 3.0 Hours
 * **Objective:** Generate ground-truth "on-voice" target completions for the SFT dataset.
 * **Key Tasks:**
-  * Prompt a strong teacher model (e.g., `GPT-4o-mini` or `Claude-3.5-Sonnet` API) using `voice_guidelines.md` as the system context.
+  * Prompt a strong teacher model (e.g., `GPT-4o-mini` or `Claude-3.5-Sonnet` API) using `voice_guidelines.md` as the system context. -- Used `gemini-api-key` for using free key.
   * Generate 1 gold-standard completion for each synthesized campaign brief.
 * **Deliverable:** `sft_raw.jsonl` (~150–300 prompt-completion pairs)
 
 ---
 
-### - [ ] Day 4: Data Curation, Cleaning, & Splitting
+### - Day 4: Data Curation, Cleaning, & Splitting
 * **Estimated Time:** 2.5 Hours
 * **Objective:** Enforce strict dataset quality through manual filtering and structural formatting.
 * **Key Tasks:**
@@ -63,7 +63,7 @@
 
 ---
 
-### - [ ] Day 5: Environment Setup & QLoRA Smoke Test
+### - Day 5: Environment Setup & QLoRA Smoke Test
 * **Estimated Time:** 3.0 Hours
 * **Objective:** Configure the Colab environment and verify memory constraints before the full training run.
 * **Key Tasks:**
@@ -75,7 +75,7 @@
 
 ---
 
-### - [ ] Day 6: Full SFT Run & Adapter Export
+### - Day 6: Full SFT Run & Adapter Export
 * **Estimated Time:** 3.0 Hours
 * **Objective:** Train the base SFT model and verify output quality on held-out test prompts.
 * **Key Tasks:**
@@ -93,7 +93,7 @@
 
 > **Phase Focus:** Collect A/B candidate completions, construct a DPO preference dataset, align the model using `DPOTrainer`, benchmark performance, and deploy an interactive demo.
 
-### - [ ] Day 7: DPO Candidate Sampling
+### - Day 7: DPO Candidate Sampling
 * **Estimated Time:** 2.5 Hours
 * **Objective:** Sample multiple candidate responses per prompt from the SFT model to create preference pairs.
 * **Key Tasks:**
@@ -103,7 +103,7 @@
 
 ---
 
-### - [ ] Day 8: Preference Pair Labeling (`chosen` vs. `rejected`)
+### - Day 8: Preference Pair Labeling (`chosen` vs. `rejected`)
 * **Estimated Time:** 3.0 Hours
 * **Objective:** Label candidate pairs to create the preference dataset required for DPO.
 * **Key Tasks:**
@@ -114,7 +114,7 @@
 
 ---
 
-### - [ ] Day 9: Direct Preference Optimization (DPO) Training
+### - Day 9: Direct Preference Optimization (DPO) Training
 * **Estimated Time:** 3.0 Hours
 * **Objective:** Align the SFT adapter using Direct Preference Optimization to maximize target voice features.
 * **Key Tasks:**
@@ -126,7 +126,7 @@
 
 ---
 
-### - [ ] Day 10: Multi-Stage Evaluation & Metric Collection
+### - Day 10: Multi-Stage Evaluation & Metric Collection
 * **Estimated Time:** 2.5 Hours
 * **Objective:** Quantify performance improvements across Base, SFT, and SFT+DPO model states.
 * **Key Tasks:**
@@ -138,7 +138,7 @@
 
 ---
 
-### - [ ] Day 11: Interactive Gradio Application Development
+### - Day 11: Interactive Gradio Application Development
 * **Estimated Time:** 3.0 Hours
 * **Objective:** Build a local user interface enabling side-by-side model outputs for live demonstration.
 * **Key Tasks:**
@@ -152,7 +152,7 @@
 
 ---
 
-### - [ ] Day 12: HF Spaces Deployment & Repository Finalization
+### - Day 12: HF Spaces Deployment & Repository Finalization
 * **Estimated Time:** 3.0 Hours
 * **Objective:** Deploy the interactive application to Hugging Face Spaces and finalize public documentation.
 * **Key Tasks:**
@@ -173,8 +173,8 @@
 ## Daily Execution Tracker
 
 - [x] **Day 1:** `voice_guidelines.md` created
-- [ ] **Day 2:** `raw_prompts.jsonl` generated
-- [ ] **Day 3:** `sft_raw.jsonl` synthesized
+- [x] **Day 2:** `raw_prompts.jsonl` generated
+- [x] **Day 3:** `sft_raw.jsonl` synthesized
 - [ ] **Day 4:** Data cleaned and split into `sft_{train,val,test}.jsonl`
 - [ ] **Day 5:** Colab notebook verified with 5-step smoke test
 - [ ] **Day 6:** SFT run completed; `sft-adapter` pushed to HF Hub
