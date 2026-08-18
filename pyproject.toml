@@ -8,6 +8,8 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "datasets",
+    "huggingface-hub",
     "openai>=3.2.0",
     "python-dotenv>=1.2.3",
 ]
