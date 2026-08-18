@@ -17,7 +17,7 @@
 
 > **Phase Focus:** Establish a ground-truth voice rubric, generate high-quality dataset pairs, set up the QLoRA pipeline on Google Colab, and execute the base SFT run.
 
-### - [ ] Day 1: Brand Voice Specification
+### - [x] Day 1: Brand Voice Specification
 * **Estimated Time:** 2.0 Hours
 * **Objective:** Concretely define the target brand persona to serve as the evaluation rubric for all downstream tasks.
 * **Key Tasks:**
@@ -172,7 +172,7 @@
 
 ## Daily Execution Tracker
 
-- [ ] **Day 1:** `voice_guidelines.md` created
+- [x] **Day 1:** `voice_guidelines.md` created
 - [ ] **Day 2:** `raw_prompts.jsonl` generated
 - [ ] **Day 3:** `sft_raw.jsonl` synthesized
 - [ ] **Day 4:** Data cleaned and split into `sft_{train,val,test}.jsonl`
