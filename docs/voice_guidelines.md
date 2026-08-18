@@ -19,8 +19,7 @@ adapters and not a UI-side system-prompt switch. The `[Voice: ...]` tag is
 part of the *training input* itself — every SFT and DPO example includes the
 tag prepended to the brief, so the model learns to condition its output on
 the tag at the weight level. This is what makes the "multi-voice
-conditioning" claim in the problem statement literally true rather than a
-prompting trick, and it's worth stating this way in your README/resume hook.
+conditioning" claim in the problem statement true.
 
 * `[Voice: Cozy Crochet]` → For handmade yarn items.
 * `[Voice: Romantic Floral]` → For everlasting handmade bouquets.
