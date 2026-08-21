@@ -32,7 +32,6 @@ Usage (run from the voiceforge/ repo root):
       --voice docs/voice_guidelines.md \\
       --out data/dpo_pairs.jsonl \\
       --provider gemini
-    
 """
 
 import argparse
@@ -119,10 +118,21 @@ def build_judge_user_prompt(brief, candidate_a, candidate_b):
     )
 
 
-def parse_judge_response(raw_text):
+def extract_json_object(raw_text):
+    """Robustly pull a {...} object out of a model response, tolerant of
+    code fences and leading/trailing commentary around the JSON -- reused
+    by both pairwise-judge parsing here and rubric-score parsing in
+    evaluate_and_report.py, so the fix lives in exactly one place."""
     cleaned = raw_text.strip()
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.MULTILINE).strip()
-    data = json.loads(cleaned)
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError(f"no JSON object found in response: {raw_text!r}")
+    return json.loads(cleaned[start:end + 1])
+
+
+def parse_judge_response(raw_text):
+    data = extract_json_object(raw_text)
     winner = data.get("winner", "").strip().lower()
     if winner not in ("a", "b", "tie"):
         raise ValueError(f"unexpected winner value: {winner!r}")
@@ -292,10 +302,14 @@ def main():
                 raw = call_fn(system_prompt, user_prompt, model, args.max_tokens)
                 winner, reason = parse_judge_response(raw)
             except Exception as e:
-                print(f"[{row['id']}] judge call/parse failed: {e} -- discarding this pair", file=sys.stderr)
+                # Transient (quota/rate-limit) or one-off parse failures
+                # shouldn't be treated the same as a genuine "tie" verdict --
+                # that would permanently throw away a pair that never
+                # actually got judged. Skip without writing to EITHER output
+                # file, so this id is NOT marked done and a rerun retries it.
+                print(f"[{row['id']}] judge call/parse failed: {e} -- skipping for retry "
+                      f"(rerun this script later to pick it back up)", file=sys.stderr)
                 judge_fail_count += 1
-                discard_f.write(json.dumps({**row, "discard_reason": f"judge_error: {e}"}) + "\n")
-                discard_f.flush()
                 time.sleep(args.sleep)
                 continue
 
@@ -321,8 +335,12 @@ def main():
     print(f"\nDone.")
     print(f"  Auto-labeled by rules: {auto_count}")
     print(f"  Labeled by LLM judge:  {judge_count}")
-    print(f"  Discarded (tie):       {discard_count}")
-    print(f"  Discarded (judge error): {judge_fail_count}")
+    print(f"  Discarded (near-identical or both-flawed or tie): {discard_count}")
+    print(f"  Skipped for retry (judge call/parse failed): {judge_fail_count}")
+    if judge_fail_count:
+        print(f"  -> rerun this exact command to retry those {judge_fail_count} rows "
+              f"(not marked done, so they'll be picked back up automatically). "
+              f"If it's a quota error, consider raising --sleep first.")
     print(f"Output: {args.out}")
     print(f"Discarded: {args.discarded_out}")
 
