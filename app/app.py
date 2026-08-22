@@ -136,42 +136,62 @@ def build_brief(voice_key, format_key, product, angle):
 
 
 # ---------------------------------------------------------------------------
-# Model loading (module level -- happens once when the Space starts)
+# Model loading -- LAZY, inside the GPU-decorated call, not at module level.
+#
+# ZeroGPU only attaches a real CUDA device to this process for the duration
+# of an @spaces.GPU-decorated function call. Loading a bitsandbytes 4-bit
+# model at module level (outside that context) fails with
+# "RuntimeError: No CUDA GPUs are available", because quantization during
+# from_pretrained needs an actual GPU that isn't attached yet at import
+# time. Cached in globals so this only happens once -- the Space's Python
+# process persists between calls, only GPU attachment is per-call.
 # ---------------------------------------------------------------------------
 
-print("Loading tokenizer and base model...")
-tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
+_model = None
+_tokenizer = None
 
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True,
-)
 
-base_model = AutoModelForCausalLM.from_pretrained(
-    BASE_MODEL,
-    quantization_config=bnb_config,
-    device_map="auto",
-    torch_dtype=torch.bfloat16,
-)
+def _load_model():
+    global _model, _tokenizer
+    if _model is not None:
+        return _model, _tokenizer
 
-model = PeftModel.from_pretrained(base_model, SFT_ADAPTER_REPO, adapter_name="sft")
-model.load_adapter(DPO_ADAPTER_REPO, adapter_name="dpo")
-model.eval()
-model.config.use_cache = True
-print("Model + both adapters loaded.")
+    print("Loading tokenizer and base model (first call only)...")
+    _tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+    if _tokenizer.pad_token is None:
+        _tokenizer.pad_token = _tokenizer.eos_token
+
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+
+    base_model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        quantization_config=bnb_config,
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+    )
+
+    _model = PeftModel.from_pretrained(base_model, SFT_ADAPTER_REPO, adapter_name="sft")
+    _model.load_adapter(DPO_ADAPTER_REPO, adapter_name="dpo")
+    _model.eval()
+    _model.config.use_cache = True
+    print("Model + both adapters loaded.")
+    return _model, _tokenizer
 
 
 # ---------------------------------------------------------------------------
-# Generation (GPU-decorated -- only this function actually touches the GPU
-# on ZeroGPU hardware; everything else above/below runs on the CPU container)
+# Generation (GPU-decorated -- this and _load_model above are the only
+# things that ever touch CUDA)
 # ---------------------------------------------------------------------------
 
-@spaces.GPU(duration=60)
+@spaces.GPU(duration=120)  # generous first-call budget: cold model load + quantization + 3 generations
 def generate_all_variants(voice_key, brief, max_new_tokens=150):
+    model, tokenizer = _load_model()
+
     messages = [{"role": "system", "content": DISTILLED_SYSTEM_PROMPTS[voice_key]}, {"role": "user", "content": brief}]
     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
